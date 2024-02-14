@@ -30,3 +30,15 @@ const (
 	FUNC = "FUNC" // Function
 	LET  = "LET"
 )
+
+var keywords = map[string]TokenType{
+	"fn":  FUNC,
+	"let": LET,
+}
+
+func GetTokenType(word string) TokenType {
+	if tok, ok := keywords[word]; ok {
+		return tok
+	}
+	return IDENT
+}
