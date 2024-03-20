@@ -29,9 +29,9 @@ func TestEvalIntegerExpression(t *testing.T) {
 		{"(5 + 10 * 2 + 15 / 3) * 2 + -10", 50},
 	}
 
-	for _, tst := range tests {
+	for idx, tst := range tests {
 		evaluated := testEval(tst.input)
-		testIntegerObject(t, evaluated, tst.expected)
+		testIntegerObject(t, evaluated, tst.expected, idx)
 	}
 
 }
@@ -40,18 +40,19 @@ func testEval(input string) object.Object {
 	l := lexer.New(input)
 	p := parser.New(l)
 	program := p.ParseProgram()
-	return Eval(program)
+	env := object.NewEnvironment()
+	return Eval(program, env)
 }
 
-func testIntegerObject(t *testing.T, obj object.Object, expected int64) bool {
+func testIntegerObject(t *testing.T, obj object.Object, expected int64, idx int) bool {
 	result, ok := obj.(*object.Integer)
 
 	if !ok {
-		t.Errorf("object casting to Integer failed. got=%T (%+v)", obj, obj)
+		t.Errorf("@%d:object casting to Integer failed. got=%T (%+v)", idx, obj, obj)
 		return false
 	}
 	if result.Value != expected {
-		t.Errorf("result's value not matched with expected value. got=%d, want=%d", result.Value, expected)
+		t.Errorf("@%d:result's value not matched with expected value. got=%d, want=%d", idx, result.Value, expected)
 		return false
 	}
 	return true
@@ -124,7 +125,6 @@ func TestIfExpression(t *testing.T) {
 	}{
 		{"if (true) { 10 }", 10},
 		{"if (false) { 10 }", nil},
-		// panic here if (1)
 		{"if (1) {10}", nil},
 		{"if (1<2) {10}", 10},
 		{"if (1>2) {10}", nil},
@@ -132,11 +132,11 @@ func TestIfExpression(t *testing.T) {
 		{"if (1<2) {10} else {20}", 10},
 	}
 
-	for _, tst := range tests {
+	for idx, tst := range tests {
 		evaluated := testEval(tst.input)
 		integer, ok := tst.expected.(int)
 		if ok {
-			testIntegerObject(t, evaluated, int64(integer))
+			testIntegerObject(t, evaluated, int64(integer), idx)
 		} else {
 			testNullObject(t, evaluated)
 		}
@@ -169,9 +169,9 @@ func TestReturnStatements(t *testing.T) {
       }`, 10},
 	}
 
-	for _, tst := range tests {
+	for idx, tst := range tests {
 		evaluated := testEval(tst.input)
-		testIntegerObject(t, evaluated, tst.expected)
+		testIntegerObject(t, evaluated, tst.expected, idx)
 	}
 
 }
@@ -216,22 +216,91 @@ if (10 > 1) {
 `,
 			"unknown operator: BOOLEAN + BOOLEAN",
 		},
+		{
+			"foobar",
+			"identifier not found: foobar",
+		},
 	}
-	for _, tst := range tests {
+	for idx, tst := range tests {
 		evaluated := testEval(tst.input)
 
 		errObj, ok := evaluated.(*object.Error)
 		if !ok {
-			t.Errorf("no error object returned. go=%T(%+v)",
-				evaluated, evaluated)
+			t.Errorf("@%d:no error object returned. go=%T(%+v)",
+				idx, evaluated, evaluated)
 			continue
 		}
 
 		if errObj.Message != tst.expectedMessage {
-			t.Errorf("wrong error messge. expected=%q, got=%q", tst.expectedMessage,
+			t.Errorf("@%d:wrong error messge. expected=%q, got=%q", idx, tst.expectedMessage,
 				errObj.Message)
 		}
 
 	}
 
+}
+
+func TestLetStatements(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"let a = 5;a;", 5},
+		{"let a = 5* 5;a", 25},
+		{"let a = 5; let b = a; b;", 5},
+		{"let a = 5; let b = a; let c = a + b + 5; c;", 15},
+	}
+
+	for i, tst := range tests {
+		testIntegerObject(t, testEval(tst.input), tst.expected, i)
+	}
+}
+
+func TestFunctionObject(t *testing.T) {
+	input := "fn(x) { x + 2; };"
+	evaluated := testEval(input)
+	fn, ok := evaluated.(*object.Function)
+	if !ok {
+		t.Fatalf("object is not Function. got=%T (%+v)", evaluated,
+			evaluated)
+	}
+	if len(fn.Parameters) != 1 {
+		t.Fatalf("function has wrong parameters. Parameters=%+v",
+			fn.Parameters)
+	}
+	if fn.Parameters[0].String() != "x" {
+		t.Fatalf("parameter is not 'x'. got=%q", fn.Parameters[0])
+	}
+	expectedBody := "(x + 2)"
+	if fn.Body.String() != expectedBody {
+		t.Fatalf("body is not %q. got=%q", expectedBody,
+			fn.Body.String())
+	}
+}
+
+func TestFunctionApplication(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"let identity = fn(x) { x; }; identity(5);", 5},
+		{"let identity = fn(x) { return x; }; identity(5);", 5},
+		{"let double = fn(x) { x * 2; }; double(5);", 10},
+		{"let add = fn(x, y) { x + y; }; add(5, 5);", 10},
+		{"let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20},
+		{"fn(x) { x; }(5)", 5},
+	}
+	for i, tt := range tests {
+		testIntegerObject(t, testEval(tt.input), tt.expected, i)
+	}
+}
+
+func TestClosures(t *testing.T) {
+	input := `
+let newAdder = fn(x) {
+fn(y) { x + y };
+};
+let addTwo = newAdder(2);
+addTwo(2);`
+	testIntegerObject(t, testEval(input), 4, 0)
 }
