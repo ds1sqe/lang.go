@@ -282,6 +282,8 @@ func TestTokenAdvance3(t *testing.T) {
 
   true && false;
   true || false;
+  "foobar"
+  "foo bar"
   `
 
 	tests := []struct {
@@ -341,6 +343,8 @@ func TestTokenAdvance3(t *testing.T) {
 		{token.OR, "||"},
 		{token.FALSE, "false"},
 		{token.SEMICOLON, ";"},
+		{token.STRING, "foobar"},
+		{token.STRING, "foo bar"},
 
 		// EOF
 		{token.EOF, ""},
