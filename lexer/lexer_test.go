@@ -6,7 +6,7 @@ import (
 )
 
 func TestTokenSimple(t *testing.T) {
-	input := `=+(){},;`
+	input := `=+(){},;[]`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -20,6 +20,8 @@ func TestTokenSimple(t *testing.T) {
 		{token.RBRACE, "}"},
 		{token.COMMA, ","},
 		{token.SEMICOLON, ";"},
+		{token.LBRACKET, "["},
+		{token.RBRACKET, "]"},
 		{token.EOF, ""},
 	}
 
